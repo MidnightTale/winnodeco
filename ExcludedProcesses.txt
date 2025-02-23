@@ -1,0 +1,10 @@
+explorer
+TaskMgr
+SystemSettings
+winver
+regedit
+control
+services.msc
+msconfig
+winver
+winnodeco
