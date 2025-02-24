@@ -2,7 +2,7 @@
 
 ⚠️ **USE AT YOUR OWN RISK** ⚠️
 
-This is an experimental program that removes window decorations (title bars) from Windows applications. I am not a professional programmer, and this software is provided as-is without any guarantees.
+This is an experimental program that removes window decorations (title bars) from Windows applications. I am not a skill dev, and this software is provided as-is without any guarantees.
 
 ## Configuration
 
