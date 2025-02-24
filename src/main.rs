@@ -30,15 +30,62 @@ lazy_static::lazy_static! {
 }
 
 const GWL_STYLE: i32 = -16;
-//const STYLE_TO_REMOVE: u32 = WS_CAPTION;
+//const STYLE_TO_REMOVE: u32 = WS_CAPTION | WS_THICKFRAME;
 const DWMWA_WINDOW_CORNER_PREFERENCE: DWORD = 33;
+// const DWMWCP_DEFAULT: DWORD = 0;
+// const DWMWCP_DONOTROUND: DWORD = 1;
 const DWMWCP_ROUND: DWORD = 2;
+// const DWMWCP_ROUNDSMALL: DWORD = 3;
 
 static RUNNING: AtomicBool = AtomicBool::new(true);
 
 #[derive(Serialize, Deserialize, Default)]
 struct Config {
     excluded_processes: Vec<String>,
+}
+
+impl Config {
+    fn default() -> Self {
+        Config {
+            excluded_processes: vec![
+                "explorer.exe".to_string(),
+                "SystemSettings.exe".to_string(),
+                "SearchApp.exe".to_string(),
+                "ShellExperienceHost.exe".to_string(),
+                "StartMenuExperienceHost.exe".to_string(),
+                "ApplicationFrameHost.exe".to_string(),
+                "SystemSettingsAdminFlows.exe".to_string(),
+                "PickerHost.exe".to_string(),
+                "OpenWith.exe".to_string(),
+                "taskmgr.exe".to_string(),
+                "SnippingTool.exe".to_string(),
+                "notepad.exe".to_string(),
+                "mspaint.exe".to_string(),
+                "calc.exe".to_string(),
+                "control.exe".to_string(),
+                "mmc.exe".to_string(),
+                "compmgmt.msc".to_string(),
+                "devmgmt.msc".to_string(),
+                "WinStore.App.exe".to_string(),
+                "SecurityHealthHost.exe".to_string(),
+                "SecurityHealthService.exe".to_string(),
+                "SecurityHealthSystray.exe".to_string(),
+                "SearchHost.exe".to_string(),
+                "StartMenuExperienceHost.exe".to_string(),
+                "zen.exe".to_string(),
+                "trae.exe".to_string(),
+                "chrome.exe".to_string(),
+                "firefox.exe".to_string(),
+                "brave.exe".to_string(),
+                "edge.exe".to_string(),
+                "opera.exe".to_string(),
+                "iexplore.exe".to_string(),
+                "msedge.exe".to_string(),
+                "WindowsTerminal.exe".to_string(),
+                "WinStore.App.exe".to_string(),
+            ],
+        }
+    }
 }
 
 fn get_config_path() -> PathBuf {
@@ -153,7 +200,7 @@ unsafe extern "system" fn win_event_proc(
             
             let current_style = GetWindowLongW(foreground_window, GWL_STYLE) as u32;
             let new_style = current_style;
-            //& !STYLE_TO_REMOVE;
+            //let new_style = current_style & !STYLE_TO_REMOVE;
             
             // Check style cache
             let mut cache = STYLE_CACHE.lock().unwrap();
