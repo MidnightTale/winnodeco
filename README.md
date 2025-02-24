@@ -10,12 +10,13 @@ You can exclude specific programs from having their decorations removed by addin
 
 ```json
 {
+  "$schema": "https://raw.githubusercontent.com/MidnightTale/winnodeco/refs/heads/master/schema.json",
   "ignore_patterns": {
-    "process_names": ["SearchApp", "SystemSettings", "zen", "trae", "WindowsTerminal", "notepad"],
+    "process_names": ["SearchApp", "SystemSettings", "zen", "trae", "WindowsTerminal", "notepad", "SearchHost", "Explorer", "ShellExperienceHost", "StartMenuExperienceHost"],
     "window_classes": ["Shell_TrayWnd", "Windows.UI.Core.CoreWindow"]
   },
   "override": {
-    "explorer": {
+    "exampleapp": {
         "title_bar": true,
         "window_buttons": false,
         "border_radius": "Round",
@@ -28,5 +29,5 @@ You can exclude specific programs from having their decorations removed by addin
     "border_radius": "Default",
     "border_visible": false
   }
-
+}
 ```

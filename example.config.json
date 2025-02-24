@@ -1,17 +1,17 @@
 {
-  "$schema": "https://raw.githubusercontent.com/MidnightTale/winnodeco/refs/heads/master/src/schema.json",
+  "$schema": "https://raw.githubusercontent.com/MidnightTale/winnodeco/refs/heads/master/schema.json",
   "ignore_patterns": {
-    "process_names": ["SearchApp", "SystemSettings", "zen", "trae", "WindowsTerminal", "notepad"],
+    "process_names": ["SearchApp", "SystemSettings", "zen", "trae", "WindowsTerminal", "notepad", "SearchHost", "Explorer", "ShellExperienceHost", "StartMenuExperienceHost"],
     "window_classes": ["Shell_TrayWnd", "Windows.UI.Core.CoreWindow"]
   },
-  "override": {
-    "explorer": {
-        "title_bar": true,
-        "window_buttons": false,
-        "border_radius": "Round",
-        "border_visible": false
-        }
-    },
+  "override_settings": {
+    "exampleapp": {
+      "title_bar": true,
+      "window_buttons": false,
+      "border_radius": "Round",
+      "border_visible": false
+    }
+  },
   "default_settings": {
     "title_bar": false,
     "window_buttons": false,

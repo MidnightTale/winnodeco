@@ -69,7 +69,7 @@ impl Default for WindowDecorationSettings {
 #[derive(Serialize, Deserialize, Default)]
 struct Config {
     ignore_patterns: IgnorePatterns,
-    override_settings: Vec<String>,
+    override_settings: HashMap<String, WindowDecorationSettings>,
     default_settings: WindowDecorationSettings,
 }
 
@@ -188,29 +188,29 @@ unsafe extern "system" fn win_event_proc(
             let process_name_lower = process_name.to_lowercase();
             let proc_no_exe = process_name_lower.trim_end_matches(".exe");
             
-            // Check if window should be ignored based on process name or window class
-            if config.ignore_patterns.process_names.iter().any(|p| p.to_lowercase() == proc_no_exe) ||
-               config.ignore_patterns.window_classes.contains(&window_class) {
+            info!("Process name matching: original='{}', lower='{}', no_exe='{}'", 
+                  process_name, process_name_lower, proc_no_exe);
+
+            // First check: ignore patterns
+            let should_ignore = config.ignore_patterns.process_names.iter()
+                .any(|p| p.to_lowercase().trim_end_matches(".exe") == proc_no_exe) ||
+                config.ignore_patterns.window_classes.iter()
+                .any(|c| c.to_lowercase() == window_class.to_lowercase());
+
+            if should_ignore {
                 info!("Window ignored due to ignore patterns: {} ({})", process_name, window_class);
                 return;
             }
-
-            info!("Process name matching: original='{}', lower='{}', no_exe='{}'", 
-                  process_name, process_name_lower, proc_no_exe);
             
-            // Check if process is in override list
-            let should_modify = !config.override_settings.contains(&proc_no_exe.to_string());
-
-            info!("Should modify window: {} (should_modify={})", 
-                  process_name, should_modify);
-
-            if !should_modify {
-                info!("Process {} skipped as it's in override list", process_name);
-                return;
-            }
-
-            // Use default settings since process is not in override list
-            let settings = &config.default_settings;
+            // Second check: override settings
+            let settings = if let Some(override_settings) = config.override_settings.get(proc_no_exe) {
+                info!("Using override settings for {}", process_name);
+                override_settings
+            } else {
+                // Third check: default settings
+                info!("Using default settings for {}", process_name);
+                &config.default_settings
+            };
     
             let current_style = GetWindowLongW(foreground_window, GWL_STYLE) as u32;
             let mut new_style = current_style;
