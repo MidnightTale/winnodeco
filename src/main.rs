@@ -30,7 +30,7 @@ lazy_static::lazy_static! {
 }
 
 const GWL_STYLE: i32 = -16;
-//const STYLE_TO_REMOVE: u32 = WS_CAPTION | WS_THICKFRAME;
+const STYLE_TO_REMOVE: u32 = WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
 const DWMWA_WINDOW_CORNER_PREFERENCE: DWORD = 33;
 // const DWMWCP_DEFAULT: DWORD = 0;
 // const DWMWCP_DONOTROUND: DWORD = 1;
@@ -199,8 +199,7 @@ unsafe extern "system" fn win_event_proc(
             }
             
             let current_style = GetWindowLongW(foreground_window, GWL_STYLE) as u32;
-            let new_style = current_style;
-            //let new_style = current_style & !STYLE_TO_REMOVE;
+            let new_style = current_style & !STYLE_TO_REMOVE;
             
             // Check style cache
             let mut cache = STYLE_CACHE.lock().unwrap();
