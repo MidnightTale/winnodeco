@@ -15,19 +15,19 @@ You can exclude specific programs from having their decorations removed by addin
     "process_names": ["SearchApp", "SystemSettings", "zen", "trae", "WindowsTerminal", "notepad", "SearchHost", "Explorer", "ShellExperienceHost", "StartMenuExperienceHost"],
     "window_classes": ["Shell_TrayWnd", "Windows.UI.Core.CoreWindow"]
   },
-  "override": {
+  "override_settings": {
     "exampleapp": {
-        "title_bar": true,
-        "window_buttons": false,
-        "border_radius": "Round",
-        "border_visible": false
-        }
-    },
+      "title_bar": true,
+      "window_buttons": false,
+      "border_radius": "Round",
+      "border_visible": false
+    }
+  },
   "default_settings": {
     "title_bar": false,
     "window_buttons": false,
     "border_radius": "Default",
     "border_visible": false
   }
-}
+}s
 ```
