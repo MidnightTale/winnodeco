@@ -10,6 +10,61 @@ You can exclude specific programs from having their decorations removed by addin
 
 ```json
 {
-    "excluded_processes": ["explorer.exe", "taskmanager.exe"]
+  "ignore_patterns": {
+    "process_names": ["SearchApp", "SystemSettings", "zen", "trae", "WindowsTerminal", "notepad"],
+    "window_classes": ["Shell_TrayWnd", "Windows.UI.Core.CoreWindow"]
+  },
+  "override": {
+    "explorer": {
+        "title_bar": true,
+        "window_buttons": false,
+        "border_radius": "Round",
+        "border_visible": false
+        }
+    },
+  "default_settings": {
+    "title_bar": false,
+    "window_buttons": false,
+    "border_radius": "Default",
+    "border_visible": false
+  }
+}{
+  "ignore_patterns": {
+    "process_names": ["SearchApp", "SystemSettings", "zen", "trae", "WindowsTerminal", "notepad"],
+    "window_classes": ["Shell_TrayWnd", "Windows.UI.Core.CoreWindow"]
+  },
+  "override": {
+    "explorer": {
+        "title_bar": true,
+        "window_buttons": false,
+        "border_radius": "Round",
+        "border_visible": false
+        }
+    },
+  "default_settings": {
+    "title_bar": false,
+    "window_buttons": false,
+    "border_radius": "Default",
+    "border_visible": false
+  }
+}{
+  "ignore_patterns": {
+    "process_names": ["SearchApp", "SystemSettings", "zen", "trae", "WindowsTerminal", "notepad"],
+    "window_classes": ["Shell_TrayWnd", "Windows.UI.Core.CoreWindow"]
+  },
+  "override": {
+    "explorer": {
+        "title_bar": true,
+        "window_buttons": false,
+        "border_radius": "Round",
+        "border_visible": false
+        }
+    },
+  "default_settings": {
+    "title_bar": false,
+    "window_buttons": false,
+    "border_radius": "Default",
+    "border_visible": false
+  }
 }
 ```
