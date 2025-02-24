@@ -1,3 +1,4 @@
+#![windows_subsystem = "windows"]
 use std::fs;
 use std::path::PathBuf;
 use std::ptr;
@@ -219,23 +220,16 @@ unsafe extern "system" fn win_event_proc(
                 info!("Modifying window decoration for {} (style: 0x{:x} -> 0x{:x})", 
                       process_name, current_style, new_style);
                 
-                // Apply style changes multiple times with small delays to ensure they stick
-                for _ in 0..3 {
-                    let result = SetWindowLongW(foreground_window, GWL_STYLE, new_style as i32);
-                    if result != 0 {
-                        cache.insert(safe_hwnd, new_style);
-                        
-
-                        
-                        SetWindowPos(
-                            foreground_window,
-                            ptr::null_mut(),
-                            0, 0, 0, 0,
-                            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED,
-                        );
-                        
-                        std::thread::sleep(std::time::Duration::from_millis(10));
-                    }
+                let result = SetWindowLongW(foreground_window, GWL_STYLE, new_style as i32);
+                if result != 0 {
+                    cache.insert(safe_hwnd, new_style);
+                    
+                    SetWindowPos(
+                        foreground_window,
+                        ptr::null_mut(),
+                        0, 0, 0, 0,
+                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED,
+                    );
                 }
                 info!("Successfully modified window decoration for {}", process_name);
             }
@@ -286,8 +280,6 @@ fn main() {
         
         if debug_mode {
             println!("Window decoration remover is running in debug mode... Press Ctrl+C to exit");
-        } else {
-            println!("Window decoration remover is running... Press Ctrl+C to exit");
         }
         
         let mut msg: MSG = std::mem::zeroed();
