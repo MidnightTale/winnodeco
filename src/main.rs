@@ -1,5 +1,4 @@
 use std::fs;
-use std::io;
 use std::path::PathBuf;
 use std::ptr;
 use serde::{Deserialize, Serialize};
@@ -16,6 +15,7 @@ use winapi::um::psapi::GetModuleBaseNameW;
 use winapi::um::winnt::PROCESS_QUERY_INFORMATION;
 use winapi::um::wincon::GetConsoleWindow;
 use winapi::um::dwmapi::*;
+use winapi::um::uxtheme::MARGINS;
 
 #[derive(Hash, Eq, PartialEq, Clone, Copy)]
 struct SafeHWND(HWND);
@@ -26,66 +26,57 @@ unsafe impl Sync for SafeHWND {}
 lazy_static::lazy_static! {
     static ref STYLE_CACHE: Mutex<HashMap<SafeHWND, u32>> = Mutex::new(HashMap::with_capacity(100));
     static ref PROCESS_CACHE: Mutex<HashMap<DWORD, Option<String>>> = Mutex::new(HashMap::with_capacity(50));
-    static ref EXCLUDED_PROCESSES: Mutex<Vec<String>> = Mutex::new(Vec::new());
+    static ref CONFIG: Mutex<Config> = Mutex::new(Config::default());
 }
 
 const GWL_STYLE: i32 = -16;
-const STYLE_TO_REMOVE: u32 = WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
+const STYLE_TO_REMOVE: u32 = WS_CAPTION | WS_THICKFRAME;
 const DWMWA_WINDOW_CORNER_PREFERENCE: DWORD = 33;
-// const DWMWCP_DEFAULT: DWORD = 0;
-// const DWMWCP_DONOTROUND: DWORD = 1;
+const DWMWCP_DEFAULT: DWORD = 0;
+const DWMWCP_DONOTROUND: DWORD = 1;
 const DWMWCP_ROUND: DWORD = 2;
-// const DWMWCP_ROUNDSMALL: DWORD = 3;
+const DWMWCP_ROUNDSMALL: DWORD = 3;
 
 static RUNNING: AtomicBool = AtomicBool::new(true);
 
-#[derive(Serialize, Deserialize, Default)]
-struct Config {
-    excluded_processes: Vec<String>,
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+enum BorderRadius {
+    Round,
+    HalfRound,
+    None,
+    Default,
 }
 
-impl Config {
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct WindowDecorationSettings {
+    title_bar: bool,
+    window_buttons: bool,
+    border_radius: BorderRadius,
+    border_visible: bool,
+}
+
+impl Default for WindowDecorationSettings {
     fn default() -> Self {
-        Config {
-            excluded_processes: vec![
-                "explorer.exe".to_string(),
-                "SystemSettings.exe".to_string(),
-                "SearchApp.exe".to_string(),
-                "ShellExperienceHost.exe".to_string(),
-                "StartMenuExperienceHost.exe".to_string(),
-                "ApplicationFrameHost.exe".to_string(),
-                "SystemSettingsAdminFlows.exe".to_string(),
-                "PickerHost.exe".to_string(),
-                "OpenWith.exe".to_string(),
-                "taskmgr.exe".to_string(),
-                "SnippingTool.exe".to_string(),
-                "notepad.exe".to_string(),
-                "mspaint.exe".to_string(),
-                "calc.exe".to_string(),
-                "control.exe".to_string(),
-                "mmc.exe".to_string(),
-                "compmgmt.msc".to_string(),
-                "devmgmt.msc".to_string(),
-                "WinStore.App.exe".to_string(),
-                "SecurityHealthHost.exe".to_string(),
-                "SecurityHealthService.exe".to_string(),
-                "SecurityHealthSystray.exe".to_string(),
-                "SearchHost.exe".to_string(),
-                "StartMenuExperienceHost.exe".to_string(),
-                "zen.exe".to_string(),
-                "trae.exe".to_string(),
-                "chrome.exe".to_string(),
-                "firefox.exe".to_string(),
-                "brave.exe".to_string(),
-                "edge.exe".to_string(),
-                "opera.exe".to_string(),
-                "iexplore.exe".to_string(),
-                "msedge.exe".to_string(),
-                "WindowsTerminal.exe".to_string(),
-                "WinStore.App.exe".to_string(),
-            ],
+        Self {
+            title_bar: false,
+            window_buttons: false,
+            border_radius: BorderRadius::Round,
+            border_visible: false,
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Default)]
+struct Config {
+    ignore_patterns: IgnorePatterns,
+    override_settings: Vec<String>,
+    default_settings: WindowDecorationSettings,
+}
+
+#[derive(Serialize, Deserialize, Default)]
+struct IgnorePatterns {
+    process_names: Vec<String>,
+    window_classes: Vec<String>,
 }
 
 fn get_config_path() -> PathBuf {
@@ -97,18 +88,19 @@ fn get_config_path() -> PathBuf {
     config_dir
 }
 
-fn read_excluded_processes() -> io::Result<Vec<String>> {
+fn load_config() -> Config {
     let config_path = get_config_path();
+    info!("Loading config from path: {}", config_path.display());
     
-    if !config_path.exists() {
-        let default_config = Config::default();
-        fs::write(&config_path, serde_json::to_string_pretty(&default_config)?)?;
-        return Ok(Vec::new());
+    if let Ok(config_str) = fs::read_to_string(&config_path) {
+        info!("Raw config content: {}", config_str);
+        if let Ok(config) = serde_json::from_str::<Config>(&config_str) {
+            info!("Parsed config: override_settings_count={}, default_settings={:?}", 
+                  config.override_settings.len(), config.default_settings);
+            return config;
+        }
     }
-    
-    let config_str = fs::read_to_string(config_path)?;
-    let config: Config = serde_json::from_str(&config_str).unwrap_or_default();
-    Ok(config.excluded_processes)
+    Config::default()
 }
 
 // Get process name from window handle with caching
@@ -182,25 +174,52 @@ unsafe extern "system" fn win_event_proc(
             return; 
         }
 
+        // Get window class name
+        let mut class_name = [0u16; 256];
+        if GetClassNameW(foreground_window, class_name.as_mut_ptr(), class_name.len() as i32) == 0 {
+            return;
+        }
+        let window_class = String::from_utf16_lossy(&class_name[..class_name.iter().position(|&x| x == 0).unwrap_or(class_name.len())]);
+
         if let Some(process_name) = get_process_name(foreground_window) {
-            info!("Detected foreground window change: {}", process_name);
+            info!("Detected foreground window change: {} (class: {})", process_name, window_class);
             
-            // Check excluded processes
-            let excluded = EXCLUDED_PROCESSES.lock().unwrap();
+            let config = CONFIG.lock().unwrap();
             let process_name_lower = process_name.to_lowercase();
-            if excluded.iter().any(|p| {
-                let p_lower = p.to_lowercase();
-                let p_no_exe = p_lower.trim_end_matches(".exe");
-                let proc_no_exe = process_name_lower.trim_end_matches(".exe");
-                p_no_exe == proc_no_exe
-            }) {
-                info!("Process {} is in exclusion list, skipping", process_name);
+            let proc_no_exe = process_name_lower.trim_end_matches(".exe");
+            
+            // Check if window should be ignored based on process name or window class
+            if config.ignore_patterns.process_names.iter().any(|p| p.to_lowercase() == proc_no_exe) ||
+               config.ignore_patterns.window_classes.contains(&window_class) {
+                info!("Window ignored due to ignore patterns: {} ({})", process_name, window_class);
                 return;
             }
+
+            info!("Process name matching: original='{}', lower='{}', no_exe='{}'", 
+                  process_name, process_name_lower, proc_no_exe);
             
+            // Check if process is in override list
+            let should_modify = !config.override_settings.contains(&proc_no_exe.to_string());
+
+            info!("Should modify window: {} (should_modify={})", 
+                  process_name, should_modify);
+
+            if !should_modify {
+                info!("Process {} skipped as it's in override list", process_name);
+                return;
+            }
+
+            // Use default settings since process is not in override list
+            let settings = &config.default_settings;
+    
             let current_style = GetWindowLongW(foreground_window, GWL_STYLE) as u32;
-            let new_style = current_style & !STYLE_TO_REMOVE;
-            
+            let mut new_style = current_style;
+
+            // Apply title bar and window button settings
+            if !settings.title_bar || !settings.window_buttons {
+                new_style &= !STYLE_TO_REMOVE;
+            }
+
             // Check style cache
             let mut cache = STYLE_CACHE.lock().unwrap();
             let safe_hwnd = SafeHWND(foreground_window);
@@ -219,13 +238,26 @@ unsafe extern "system" fn win_event_proc(
                 if result != 0 {
                     cache.insert(safe_hwnd, new_style);
                     
-                    // Set DWM window corner preference to maintain rounded corners
+                    // Apply border radius setting
+                    let corner_preference = match settings.border_radius {
+                        BorderRadius::Round => DWMWCP_ROUND,
+                        BorderRadius::HalfRound => DWMWCP_ROUNDSMALL,
+                        BorderRadius::None => DWMWCP_DONOTROUND,
+                        BorderRadius::Default => DWMWCP_DEFAULT,
+                    };
+                    
                     DwmSetWindowAttribute(
                         foreground_window,
                         DWMWA_WINDOW_CORNER_PREFERENCE,
-                        &(DWMWCP_ROUND as i32) as *const _ as *const _,
+                        &(corner_preference as i32) as *const _ as *const _,
                         std::mem::size_of::<i32>() as u32
                     );
+
+                    // Apply border visibility setting
+                    if !settings.border_visible {
+                        let margins = [0i32; 4];
+                        DwmExtendFrameIntoClientArea(foreground_window, &margins as *const _ as *const MARGINS);
+                    }
                     
                     SetWindowPos(
                         foreground_window,
@@ -263,17 +295,9 @@ fn main() {
         env_logger::init();
         info!("Starting window decoration remover in debug mode...");
     }
-
-    // Initialize excluded processes
-    if let Ok(processes) = read_excluded_processes() {
-        let mut excluded = EXCLUDED_PROCESSES.lock().unwrap();
-        *excluded = processes.clone();
-        if debug_mode {
-            info!("Loaded excluded processes: {:?}", processes);
-        }
-    } else if debug_mode {
-        warn!("Failed to load excluded processes");    
-    }
+    
+    // Load config at startup
+    *CONFIG.lock().unwrap() = load_config();
     
     unsafe {
         let hook = SetWinEventHook(

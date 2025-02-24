@@ -1,0 +1,77 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "ignore_patterns": {
+      "type": "object",
+      "properties": {
+        "process_names": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of process names to ignore"
+        },
+        "window_classes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of window class names to ignore"
+        }
+      },
+      "required": ["process_names", "window_classes"]
+    },
+    "override": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "title_bar": {
+            "type": "boolean",
+            "description": "Whether to show the title bar"
+          },
+          "window_buttons": {
+            "type": "boolean",
+            "description": "Whether to show window buttons"
+          },
+          "border_radius": {
+            "type": "string",
+            "enum": ["Default", "Round", "None"],
+            "description": "Border radius style"
+          },
+          "border_visible": {
+            "type": "boolean",
+            "description": "Whether to show window border"
+          }
+        },
+        "required": ["title_bar", "window_buttons", "border_radius", "border_visible"]
+      },
+      "description": "Override settings for specific applications"
+    },
+    "default_settings": {
+      "type": "object",
+      "properties": {
+        "title_bar": {
+          "type": "boolean",
+          "description": "Whether to show the title bar by default"
+        },
+        "window_buttons": {
+          "type": "boolean",
+          "description": "Whether to show window buttons by default"
+        },
+        "border_radius": {
+          "type": "string",
+          "enum": ["Default", "Round", "None"],
+          "description": "Default border radius style"
+        },
+        "border_visible": {
+          "type": "boolean",
+          "description": "Whether to show window border by default"
+        }
+      },
+      "required": ["title_bar", "window_buttons", "border_radius", "border_visible"]
+    }
+  },
+  "required": ["ignore_patterns", "default_settings"]
+}
