@@ -7,15 +7,11 @@
   "override_settings": {
     "exampleapp": {
       "title_bar": true,
-      "window_buttons": false,
-      "border_radius": "Round",
-      "border_visible": false
+      "window_buttons": false
     }
   },
   "default_settings": {
     "title_bar": false,
-    "window_buttons": false,
-    "border_radius": "Default",
-    "border_visible": false
+    "window_buttons": false
   }
 }

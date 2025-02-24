@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::collections::HashMap;
 use std::sync::Mutex;
-use log::{info, warn};
+use log::info;
 use winapi::shared::minwindef::DWORD;
 use winapi::shared::windef::{HWINEVENTHOOK, HWND};
 use winapi::shared::ntdef::LONG;
@@ -14,8 +14,6 @@ use winapi::um::winuser::*;
 use winapi::um::psapi::GetModuleBaseNameW;
 use winapi::um::winnt::PROCESS_QUERY_INFORMATION;
 use winapi::um::wincon::GetConsoleWindow;
-use winapi::um::dwmapi::*;
-use winapi::um::uxtheme::MARGINS;
 
 #[derive(Hash, Eq, PartialEq, Clone, Copy)]
 struct SafeHWND(HWND);
@@ -31,28 +29,16 @@ lazy_static::lazy_static! {
 
 const GWL_STYLE: i32 = -16;
 const STYLE_TO_REMOVE: u32 = WS_CAPTION | WS_THICKFRAME;
-const DWMWA_WINDOW_CORNER_PREFERENCE: DWORD = 33;
-const DWMWCP_DEFAULT: DWORD = 0;
-const DWMWCP_DONOTROUND: DWORD = 1;
-const DWMWCP_ROUND: DWORD = 2;
-const DWMWCP_ROUNDSMALL: DWORD = 3;
+
 
 static RUNNING: AtomicBool = AtomicBool::new(true);
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
-enum BorderRadius {
-    Round,
-    HalfRound,
-    None,
-    Default,
-}
+
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct WindowDecorationSettings {
     title_bar: bool,
     window_buttons: bool,
-    border_radius: BorderRadius,
-    border_visible: bool,
 }
 
 impl Default for WindowDecorationSettings {
@@ -60,8 +46,6 @@ impl Default for WindowDecorationSettings {
         Self {
             title_bar: false,
             window_buttons: false,
-            border_radius: BorderRadius::Round,
-            border_visible: false,
         }
     }
 }
@@ -234,41 +218,26 @@ unsafe extern "system" fn win_event_proc(
             if current_style != new_style {
                 info!("Modifying window decoration for {} (style: 0x{:x} -> 0x{:x})", 
                       process_name, current_style, new_style);
-                let result = SetWindowLongW(foreground_window, GWL_STYLE, new_style as i32);
-                if result != 0 {
-                    cache.insert(safe_hwnd, new_style);
-                    
-                    // Apply border radius setting
-                    let corner_preference = match settings.border_radius {
-                        BorderRadius::Round => DWMWCP_ROUND,
-                        BorderRadius::HalfRound => DWMWCP_ROUNDSMALL,
-                        BorderRadius::None => DWMWCP_DONOTROUND,
-                        BorderRadius::Default => DWMWCP_DEFAULT,
-                    };
-                    
-                    DwmSetWindowAttribute(
-                        foreground_window,
-                        DWMWA_WINDOW_CORNER_PREFERENCE,
-                        &(corner_preference as i32) as *const _ as *const _,
-                        std::mem::size_of::<i32>() as u32
-                    );
+                
+                // Apply style changes multiple times with small delays to ensure they stick
+                for _ in 0..3 {
+                    let result = SetWindowLongW(foreground_window, GWL_STYLE, new_style as i32);
+                    if result != 0 {
+                        cache.insert(safe_hwnd, new_style);
+                        
 
-                    // Apply border visibility setting
-                    if !settings.border_visible {
-                        let margins = [0i32; 4];
-                        DwmExtendFrameIntoClientArea(foreground_window, &margins as *const _ as *const MARGINS);
+                        
+                        SetWindowPos(
+                            foreground_window,
+                            ptr::null_mut(),
+                            0, 0, 0, 0,
+                            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED,
+                        );
+                        
+                        std::thread::sleep(std::time::Duration::from_millis(10));
                     }
-                    
-                    SetWindowPos(
-                        foreground_window,
-                        ptr::null_mut(),
-                        0, 0, 0, 0,
-                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED,
-                    );
-                    info!("Successfully modified window decoration for {}", process_name);
-                } else {
-                    warn!("Failed to modify window decoration for {}", process_name);
                 }
+                info!("Successfully modified window decoration for {}", process_name);
             }
         }
     }

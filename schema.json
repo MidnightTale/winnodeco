@@ -34,18 +34,9 @@
           "window_buttons": {
             "type": "boolean",
             "description": "Whether to show window buttons"
-          },
-          "border_radius": {
-            "type": "string",
-            "enum": ["Default", "Round", "None"],
-            "description": "Border radius style"
-          },
-          "border_visible": {
-            "type": "boolean",
-            "description": "Whether to show window border"
           }
         },
-        "required": ["title_bar", "window_buttons", "border_radius", "border_visible"]
+        "required": ["title_bar", "window_buttons"]
       },
       "description": "Override settings for specific applications"
     },
@@ -59,18 +50,9 @@
         "window_buttons": {
           "type": "boolean",
           "description": "Whether to show window buttons by default"
-        },
-        "border_radius": {
-          "type": "string",
-          "enum": ["Default", "Round", "None"],
-          "description": "Default border radius style"
-        },
-        "border_visible": {
-          "type": "boolean",
-          "description": "Whether to show window border by default"
         }
       },
-      "required": ["title_bar", "window_buttons", "border_radius", "border_visible"]
+      "required": ["title_bar", "window_buttons"]
     }
   },
   "required": ["ignore_patterns", "default_settings"]
