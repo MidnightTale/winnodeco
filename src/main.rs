@@ -1,10 +1,12 @@
-use std::fs::File;
-use std::io::{self, BufRead};
-use std::path::Path;
+use std::fs;
+use std::io;
+use std::path::PathBuf;
 use std::ptr;
+use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::collections::HashMap;
 use std::sync::Mutex;
+use log::{info, warn};
 use winapi::shared::minwindef::DWORD;
 use winapi::shared::windef::{HWINEVENTHOOK, HWND};
 use winapi::shared::ntdef::LONG;
@@ -12,6 +14,7 @@ use winapi::um::processthreadsapi::{GetCurrentProcessId, OpenProcess};
 use winapi::um::winuser::*;
 use winapi::um::psapi::GetModuleBaseNameW;
 use winapi::um::winnt::PROCESS_QUERY_INFORMATION;
+use winapi::um::wincon::GetConsoleWindow;
 
 #[derive(Hash, Eq, PartialEq, Clone, Copy)]
 struct SafeHWND(HWND);
@@ -30,20 +33,32 @@ const STYLE_TO_REMOVE: u32 = WS_CAPTION | WS_THICKFRAME;
 
 static RUNNING: AtomicBool = AtomicBool::new(true);
 
-// Read excluded processes from file
+#[derive(Serialize, Deserialize, Default)]
+struct Config {
+    excluded_processes: Vec<String>,
+}
+
+fn get_config_path() -> PathBuf {
+    let mut config_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    config_dir.push(".config");
+    config_dir.push("winnodeco");
+    fs::create_dir_all(&config_dir).unwrap_or_default();
+    config_dir.push("config.json");
+    config_dir
+}
+
 fn read_excluded_processes() -> io::Result<Vec<String>> {
-    let path = Path::new("ExcludedProcesses.txt");
-    let file = File::open(path)?;
-    let reader = io::BufReader::new(file);
-    let mut processes = Vec::new();
+    let config_path = get_config_path();
     
-    for line in reader.lines() {
-        if let Ok(process) = line {
-            processes.push(process.trim().to_string());
-        }
+    if !config_path.exists() {
+        let default_config = Config::default();
+        fs::write(&config_path, serde_json::to_string_pretty(&default_config)?)?;
+        return Ok(Vec::new());
     }
     
-    Ok(processes)
+    let config_str = fs::read_to_string(config_path)?;
+    let config: Config = serde_json::from_str(&config_str).unwrap_or_default();
+    Ok(config.excluded_processes)
 }
 
 // Get process name from window handle with caching
@@ -113,12 +128,19 @@ unsafe extern "system" fn win_event_proc(
 ) {
     unsafe {
         let foreground_window = GetForegroundWindow();
-        if foreground_window.is_null() { return; }
+        if foreground_window.is_null() { 
+            return; 
+        }
 
         if let Some(process_name) = get_process_name(foreground_window) {
+            info!("Detected foreground window change: {}", process_name);
+            
             // Check excluded processes
             let excluded = EXCLUDED_PROCESSES.lock().unwrap();
-            if excluded.iter().any(|p| p == &process_name) { return; }
+            if excluded.iter().any(|p| p == &process_name) {
+                info!("Process {} is in exclusion list, skipping", process_name);
+                return;
+            }
             
             let current_style = GetWindowLongW(foreground_window, GWL_STYLE) as u32;
             let new_style = current_style & !STYLE_TO_REMOVE;
@@ -127,11 +149,16 @@ unsafe extern "system" fn win_event_proc(
             let mut cache = STYLE_CACHE.lock().unwrap();
             let safe_hwnd = SafeHWND(foreground_window);
             if let Some(&cached_style) = cache.get(&safe_hwnd) {
-                if cached_style == new_style { return; }
+                if cached_style == new_style { 
+                    info!("Window style already modified for {}", process_name);
+                    return; 
+                }
             }
             
             // Update style if different
             if current_style != new_style {
+                info!("Modifying window decoration for {} (style: 0x{:x} -> 0x{:x})", 
+                      process_name, current_style, new_style);
                 let result = SetWindowLongW(foreground_window, GWL_STYLE, new_style as i32);
                 if result != 0 {
                     cache.insert(safe_hwnd, new_style);
@@ -141,6 +168,9 @@ unsafe extern "system" fn win_event_proc(
                         0, 0, 0, 0,
                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED,
                     );
+                    info!("Successfully modified window decoration for {}", process_name);
+                } else {
+                    warn!("Failed to modify window decoration for {}", process_name);
                 }
             }
         }
@@ -148,10 +178,36 @@ unsafe extern "system" fn win_event_proc(
 }
 
 fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    let debug_mode = args.iter().any(|arg| arg == "--debug");
+
+    unsafe {
+        // Hide console window if not in debug mode
+        if !debug_mode {
+            let window = GetConsoleWindow();
+            if !window.is_null() {
+                ShowWindow(window, SW_HIDE);
+            }
+        }
+    }
+
+    if debug_mode {
+        unsafe {
+            std::env::set_var("RUST_LOG", "info");
+        }
+        env_logger::init();
+        info!("Starting window decoration remover in debug mode...");
+    }
+
     // Initialize excluded processes
     if let Ok(processes) = read_excluded_processes() {
         let mut excluded = EXCLUDED_PROCESSES.lock().unwrap();
-        *excluded = processes;
+        *excluded = processes.clone();
+        if debug_mode {
+            info!("Loaded excluded processes: {:?}", processes);
+        }
+    } else if debug_mode {
+        warn!("Failed to load excluded processes");    
     }
     
     unsafe {
@@ -170,7 +226,11 @@ fn main() {
             return;
         }
         
-        println!("Window decoration remover is running... Press Ctrl+C to exit");
+        if debug_mode {
+            println!("Window decoration remover is running in debug mode... Press Ctrl+C to exit");
+        } else {
+            println!("Window decoration remover is running... Press Ctrl+C to exit");
+        }
         
         let mut msg: MSG = std::mem::zeroed();
         while RUNNING.load(Ordering::SeqCst) {
