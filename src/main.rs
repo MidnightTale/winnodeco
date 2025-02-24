@@ -15,6 +15,7 @@ use winapi::um::winuser::*;
 use winapi::um::psapi::GetModuleBaseNameW;
 use winapi::um::winnt::PROCESS_QUERY_INFORMATION;
 use winapi::um::wincon::GetConsoleWindow;
+use winapi::um::dwmapi::*;
 
 #[derive(Hash, Eq, PartialEq, Clone, Copy)]
 struct SafeHWND(HWND);
@@ -29,7 +30,9 @@ lazy_static::lazy_static! {
 }
 
 const GWL_STYLE: i32 = -16;
-const STYLE_TO_REMOVE: u32 = WS_CAPTION | WS_THICKFRAME;
+//const STYLE_TO_REMOVE: u32 = WS_CAPTION;
+const DWMWA_WINDOW_CORNER_PREFERENCE: DWORD = 33;
+const DWMWCP_ROUND: DWORD = 2;
 
 static RUNNING: AtomicBool = AtomicBool::new(true);
 
@@ -137,13 +140,20 @@ unsafe extern "system" fn win_event_proc(
             
             // Check excluded processes
             let excluded = EXCLUDED_PROCESSES.lock().unwrap();
-            if excluded.iter().any(|p| p == &process_name) {
+            let process_name_lower = process_name.to_lowercase();
+            if excluded.iter().any(|p| {
+                let p_lower = p.to_lowercase();
+                let p_no_exe = p_lower.trim_end_matches(".exe");
+                let proc_no_exe = process_name_lower.trim_end_matches(".exe");
+                p_no_exe == proc_no_exe
+            }) {
                 info!("Process {} is in exclusion list, skipping", process_name);
                 return;
             }
             
             let current_style = GetWindowLongW(foreground_window, GWL_STYLE) as u32;
-            let new_style = current_style & !STYLE_TO_REMOVE;
+            let new_style = current_style;
+            //& !STYLE_TO_REMOVE;
             
             // Check style cache
             let mut cache = STYLE_CACHE.lock().unwrap();
@@ -162,6 +172,15 @@ unsafe extern "system" fn win_event_proc(
                 let result = SetWindowLongW(foreground_window, GWL_STYLE, new_style as i32);
                 if result != 0 {
                     cache.insert(safe_hwnd, new_style);
+                    
+                    // Set DWM window corner preference to maintain rounded corners
+                    DwmSetWindowAttribute(
+                        foreground_window,
+                        DWMWA_WINDOW_CORNER_PREFERENCE,
+                        &(DWMWCP_ROUND as i32) as *const _ as *const _,
+                        std::mem::size_of::<i32>() as u32
+                    );
+                    
                     SetWindowPos(
                         foreground_window,
                         ptr::null_mut(),
